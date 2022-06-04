@@ -1,0 +1,31 @@
+def doneIssueTypeName='Done'
+def nextStepIssueTypeName='Ready for Test'
+def parentissue = issue.fields.parent
+def progressingSubTaskCount=0
+def returnstring=''
+if (parentissue!=null){
+    def story=get("rest/api/2/issue/${parentissue.key}")
+        .header("Accept", "application/json")
+        .asObject(Map)
+        .body
+    progressingSubTaskCount=story.fields.subtasks.findAll{(it.fields.status.name!=doneIssueTypeName)}.size()
+    logger.warn "progressingSubTaskCount : ${progressingSubTaskCount}"
+    if (progressingSubTaskCount==0){
+        def analysingIssueTransition = get("rest/api/2/issue/${story.key}/transitions")
+            .header("Accept", "application/json")
+            .asObject(Map)
+            .body
+            .transitions.find {
+                (it as Map).to.name == nextStepIssueTypeName
+            } as Map
+        if (analysingIssueTransition!=null){
+            def transitionIssue = post("/rest/api/2/issue/${story.key}/transitions")
+                .header("Content-Type", "application/json")
+                .body([transition: [id: analysingIssueTransition.id]])
+                .asObject(Map)
+            returnstring +="Parent issue status moved to ${nextStepIssueTypeName}"
+        }
+    }
+}
+
+return returnstring
